@@ -53,6 +53,20 @@ async function run() {
       const result = (await users.find().toArray()).reverse();
       res.send(result);
     });
+    app.get("/usersRole", async (req, res) => {
+      const query = req.query;
+
+      if (!query.email) {
+        return res.status(400).send({ error: "Email parameter is required" });
+      }
+
+      if (req?.query) {
+        const result = await users.findOne({ email: query.email });
+        res.send(result);
+      } else {
+        res.status(404).send({ error: "User not found" });
+      }
+    });
 
     app.post("/users", async (req, res) => {
       const data = req.body;
