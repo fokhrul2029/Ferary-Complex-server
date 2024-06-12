@@ -6,6 +6,7 @@ const cors = require("cors");
 
 // MiddleWares
 app.use(cors());
+app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
 
@@ -28,6 +29,7 @@ async function run() {
     const slides = database.collection("slides");
     const apartments = database.collection("apartments");
     const coupons = database.collection("coupons");
+    const users = database.collection("users");
 
     app.get("/", (req, res) => {
       res.send("Hello World");
@@ -45,6 +47,30 @@ async function run() {
     app.get("/coupons", async (req, res) => {
       const result = (await coupons.find().toArray()).reverse();
       res.send(result);
+    });
+
+    app.get("/users", async (req, res) => {
+      const result = (await users.find().toArray()).reverse();
+      res.send(result);
+    });
+
+    app.post("/users", async (req, res) => {
+      const data = req.body;
+
+      // Check if the email already exists
+      const existingUser = await users.findOne({ email: data.email });
+
+      if (existingUser) {
+        res.status(400).send({ error: "Email already in use" });
+      } else {
+        const doc = {
+          name: data.name,
+          email: data.email,
+          role: "",
+        };
+        const result = await users.insertOne(doc);
+        res.send(result);
+      }
     });
 
     // console.log(
