@@ -3,9 +3,18 @@ require("dotenv").config();
 const express = require("express");
 const app = express();
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 
 // MiddleWares
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://building-management-app-d8c65.web.app",
+      "https://building-management-app-d8c65.firebaseapp.com",
+    ],
+  })
+);
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
@@ -20,6 +29,12 @@ const client = new MongoClient(uri, {
   },
 });
 
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+};
+
 async function run() {
   try {
     // await client.connect();
@@ -30,6 +45,25 @@ async function run() {
     const apartments = database.collection("apartments");
     const coupons = database.collection("coupons");
     const users = database.collection("users");
+    const bookedApartments = database.collection("bookedApartments");
+
+    //creating Token
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      // console.log("user for token", user);
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET);
+
+      res.send({ token });
+    });
+
+    //clearing Token
+    app.post("/logout", async (req, res) => {
+      const user = req.body;
+      console.log("logging out", user);
+      res
+        .clearCookie("token", { ...cookieOptions, maxAge: 0 })
+        .send({ success: true });
+    });
 
     app.get("/", (req, res) => {
       res.send("Hello World");
@@ -84,6 +118,29 @@ async function run() {
         };
         const result = await users.insertOne(doc);
         res.send(result);
+      }
+    });
+
+    app.post("/bookedApartments", async (req, res) => {
+      const apartmentInfo = req.body;
+      const doc = {
+        apartment_id: apartmentInfo.apartment_id,
+        userInfo: apartmentInfo.userInfo,
+        status: "pending",
+      };
+      // console.log(doc);
+
+      const userEmail = apartmentInfo.userInfo.email;
+
+      const query = { "userInfo.email": userEmail };
+
+      const isExist = await bookedApartments.findOne(query);
+
+      if (isExist) {
+        res.send({ message: "User has already booked an apartment." });
+      } else {
+        const result = await bookedApartments.insertOne(doc);
+        res.send({ result, message: "Apartment booking success" });
       }
     });
 
