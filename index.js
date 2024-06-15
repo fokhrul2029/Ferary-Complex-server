@@ -1,4 +1,4 @@
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const express = require("express");
 const app = express();
@@ -13,6 +13,7 @@ app.use(
       "https://building-management-app-d8c65.web.app",
       "https://building-management-app-d8c65.firebaseapp.com",
     ],
+    credentials: true,
   })
 );
 app.use(express.json());
@@ -46,6 +47,7 @@ async function run() {
     const coupons = database.collection("coupons");
     const users = database.collection("users");
     const bookedApartments = database.collection("bookedApartments");
+    const announcements = database.collection("announcements");
 
     //creating Token
     app.post("/jwt", async (req, res) => {
@@ -78,6 +80,7 @@ async function run() {
       const result = await apartments.find().toArray();
       res.send(result);
     });
+
     app.get("/coupons", async (req, res) => {
       const result = (await coupons.find().toArray()).reverse();
       res.send(result);
@@ -102,6 +105,11 @@ async function run() {
       }
     });
 
+    app.get("/announcements", async (req, res) => {
+      const result = (await announcements.find().toArray()).reverse();
+      res.send(result);
+    });
+
     app.post("/users", async (req, res) => {
       const data = req.body;
 
@@ -109,15 +117,44 @@ async function run() {
       const existingUser = await users.findOne({ email: data.email });
 
       if (existingUser) {
-        res.status(400).send({ error: "Email already in use" });
+        res.send({ message: "Login Success" });
       } else {
         const doc = {
           name: data.name,
           email: data.email,
           role: "",
         };
-        const result = await users.insertOne(doc);
-        res.send(result);
+        await users.insertOne(doc);
+        res.send({ message: "Registration Success" });
+      }
+    });
+
+    app.get("/bookedApartments/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { "userInfo.email": email };
+
+      const booked_apartment = await bookedApartments.findOne(query);
+
+      if (booked_apartment) {
+        const apartmentId = booked_apartment.apartment_id;
+
+        const apartmentQuery = { _id: new ObjectId(apartmentId) };
+
+        const apartmentInfo = await apartments.findOne(apartmentQuery);
+
+        const result = {
+          _id: booked_apartment._id,
+          image: apartmentInfo.image,
+          block_name: apartmentInfo.block_name,
+          apartment_no: apartmentInfo.apartment_no,
+          floor_no: apartmentInfo.floor_no,
+          rent: apartmentInfo.rent,
+          status: booked_apartment.status,
+        };
+
+        res.status(200).send(result);
+      } else {
+        res.send("You do not agreement to book.");
       }
     });
 
@@ -139,8 +176,8 @@ async function run() {
       if (isExist) {
         res.send({ message: "User has already booked an apartment." });
       } else {
-        const result = await bookedApartments.insertOne(doc);
-        res.send({ result, message: "Apartment booking success" });
+        await bookedApartments.insertOne(doc);
+        res.send({ status: 200, message: "Apartment booking success" });
       }
     });
 
