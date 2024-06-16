@@ -32,8 +32,8 @@ const client = new MongoClient(uri, {
 
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+  secure: process.env.RUNNING_ON === "production",
+  sameSite: process.env.RUNNING_ON === "production" ? "none" : "strict",
 };
 
 async function run() {
@@ -129,6 +129,32 @@ async function run() {
       }
     });
 
+    app.get("/bookedApartments", async (req, res) => {
+      const query = { status: "pending" };
+      const pendingApartments = await bookedApartments.find(query).toArray();
+      // res.send(pendingApartments)
+      if (pendingApartments.length > 0) {
+        const apartmentDetails = [];
+
+        for (pendingApartment of pendingApartments) {
+          const apartmentId = pendingApartment.apartment_id;
+          const apartmentQuery = { _id: new ObjectId(apartmentId) };
+          const result = await apartments.findOne(apartmentQuery);
+          if (result) {
+            apartmentDetails.push({
+              name: pendingApartment.userInfo.name,
+              email: pendingApartment.userInfo.email,
+              floor_no: result.floor_no,
+              block_name: result.block_name,
+              apartment_no: result.apartment_no,
+              rent: result.rent,
+            });
+          }
+        }
+        res.send(apartmentDetails);
+      }
+    });
+
     app.get("/bookedApartments/:email", async (req, res) => {
       const email = req.params.email;
       const query = { "userInfo.email": email };
@@ -179,6 +205,12 @@ async function run() {
         await bookedApartments.insertOne(doc);
         res.send({ status: 200, message: "Apartment booking success" });
       }
+    });
+
+    app.post("/announcements", async (req, res) => {
+      const body = req.body;
+      await announcements.insertOne(body);
+      res.send({ message: "Announcement successfully added." });
     });
 
     // console.log(
