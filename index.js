@@ -142,16 +142,20 @@ async function run() {
           const result = await apartments.findOne(apartmentQuery);
           if (result) {
             apartmentDetails.push({
+              _id: pendingApartment._id,
               name: pendingApartment.userInfo.name,
               email: pendingApartment.userInfo.email,
               floor_no: result.floor_no,
               block_name: result.block_name,
               apartment_no: result.apartment_no,
+              request_date: pendingApartment.request_date,
               rent: result.rent,
             });
           }
         }
         res.send(apartmentDetails);
+      } else {
+        res.send([]);
       }
     });
 
@@ -176,6 +180,7 @@ async function run() {
           floor_no: apartmentInfo.floor_no,
           rent: apartmentInfo.rent,
           status: booked_apartment.status,
+          request_date: booked_apartment.request_date,
         };
 
         res.status(200).send(result);
@@ -184,12 +189,61 @@ async function run() {
       }
     });
 
+    app.patch("/bookedApartments/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const body = req.body;
+        const userRole = body?.role === "member" ? "member" : "";
+
+        const filter = { _id: new ObjectId(id) };
+
+        const apartment = await bookedApartments.findOne(filter);
+
+        const userEmail = apartment.userInfo.email;
+
+        const filter2 = { email: userEmail };
+
+        const today = new Date();
+        const day = String(today.getDate()).padStart(2, "0");
+        const month = String(today.getMonth() + 1).padStart(2, "0");
+        const year = today.getFullYear();
+
+        const formattedDate = `${day}/${month}/${year}`;
+
+        const updateDoc = {
+          $set: {
+            status: "checked",
+            accept_date: userRole === "member" ? formattedDate : "rejected",
+          },
+        };
+        const updateDoc2 = {
+          $set: {
+            role: userRole,
+          },
+        };
+        await bookedApartments.updateMany(filter, updateDoc);
+        await users.updateOne(filter2, updateDoc2);
+
+        res.send({ status: 200, message: "Agreement Accept Success" });
+      } catch (error) {
+        res.send({ status: 400, message: "Something went wrong! try later." });
+      }
+    });
+
     app.post("/bookedApartments", async (req, res) => {
       const apartmentInfo = req.body;
+
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, "0");
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const year = now.getFullYear();
+      const requestDate = `${day}/${month}/${year}`;
+
       const doc = {
         apartment_id: apartmentInfo.apartment_id,
         userInfo: apartmentInfo.userInfo,
         status: "pending",
+        request_date: requestDate,
       };
       // console.log(doc);
 
