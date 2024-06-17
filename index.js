@@ -90,6 +90,25 @@ async function run() {
       const result = (await users.find().toArray()).reverse();
       res.send(result);
     });
+
+    app.get("/members", async (req, res) => {
+      const query = { role: "member" };
+      const result = (await users.find(query).toArray()).reverse();
+      res.send(result);
+    });
+
+    app.put("/members/:id", async (req, res) => {
+      const id = req.params;
+      const filter = { _id: new ObjectId(id) };
+      const doc = {
+        $set: {
+          role: "",
+        },
+      };
+      await users.updateOne(filter, doc);
+      res.send({ message: "Member successfully removed." });
+    });
+
     app.get("/usersRole", async (req, res) => {
       const query = req.query;
 
@@ -251,13 +270,19 @@ async function run() {
 
       const query = { "userInfo.email": userEmail };
 
-      const isExist = await bookedApartments.findOne(query);
+      const userRole = await users.findOne({ email: userEmail });
 
-      if (isExist) {
-        res.send({ message: "User has already booked an apartment." });
+      if (userRole.role === "admin") {
+        res.send({ message: "It's not available for you. Sorry!" });
       } else {
-        await bookedApartments.insertOne(doc);
-        res.send({ status: 200, message: "Apartment booking success" });
+        const isExist = await bookedApartments.findOne(query);
+
+        if (isExist) {
+          res.send({ message: "User has already booked an apartment." });
+        } else {
+          await bookedApartments.insertOne(doc);
+          res.send({ status: 200, message: "Apartment booking success" });
+        }
       }
     });
 
