@@ -4,6 +4,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+const { default: axios } = require("axios");
 
 // MiddleWares
 app.use(
@@ -17,6 +18,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(express.urlencoded());
 
 const PORT = process.env.PORT || 5000;
 
@@ -36,6 +38,22 @@ const cookieOptions = {
   sameSite: process.env.RUNNING_ON === "production" ? "none" : "strict",
 };
 
+const api_urls = {
+  dev: "http://localhost:3000",
+  prod: "https://b9-battle-for-supremacy-server-flame.vercel.app",
+};
+
+const client_urls = {
+  dev: "http://localhost:5173",
+  prod: "https://building-management-app-d8c65.web.app",
+};
+
+const api_url =
+  process.env.RUNNING_ON === "development" ? api_urls.dev : api_urls.prod;
+
+const client_url =
+  process.env.RUNNING_ON === "development" ? client_urls.dev : client_urls.prod;
+
 async function run() {
   try {
     // await client.connect();
@@ -48,6 +66,7 @@ async function run() {
     const users = database.collection("users");
     const bookedApartments = database.collection("bookedApartments");
     const announcements = database.collection("announcements");
+    const payments = database.collection("payments");
 
     //creating Token
     app.post("/jwt", async (req, res) => {
@@ -67,8 +86,121 @@ async function run() {
         .send({ success: true });
     });
 
+    // payment related routes
+
+    app.post("/create-payment", async (req, res) => {
+      const paymentInfo = req.body;
+
+      const trx_id = new ObjectId();
+
+      const initialPayment = {
+        store_id: process.env.STORE_ID,
+        store_passwd: process.env.STORE_PASS,
+        total_amount: paymentInfo.apartmentRent,
+        currency: "BDT",
+        tran_id: trx_id,
+        success_url: `${api_url}/success-payment`,
+        fail_url: `${api_url}/fail-payment`,
+        cancel_url: `${api_url}/cancel-payment`,
+        cus_name: paymentInfo.userInfo.name,
+        cus_email: paymentInfo.userInfo.email,
+        cus_add1: "Dhaka",
+        cus_add2: "Dhaka",
+        cus_city: "Dhaka",
+        cus_state: "Dhaka",
+        cus_postcode: "1000",
+        cus_country: "Bangladesh",
+        cus_phone: "01711111111",
+        cus_fax: "01711111111",
+        ship_name: paymentInfo.userInfo.name,
+        shipping_method: "NO",
+        product_name: "Apartment",
+        product_category: "Apartment",
+        product_profile: "general",
+        multi_card_name: "mastercard,visacard,amexcard",
+        value_a: "ref001_A",
+        value_b: "ref002_B",
+        value_c: "ref003_C",
+        value_d: "ref004_D",
+      };
+
+      const response = await axios.post(
+        "https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
+        initialPayment,
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        }
+      );
+      // console.log(response.data);
+
+      const savePaymentData = {
+        transactionID: trx_id,
+        bank_tran_id: "",
+        card_issuer: "",
+        currency: "",
+        amount: paymentInfo.apartmentRent,
+        store_amount: "",
+        userInfo: paymentInfo.userInfo,
+        paymentCreatedDate: Date.now,
+        tran_date: "",
+        card_brand: "",
+        month: paymentInfo.month,
+        status: "pending",
+      };
+
+      const payment = await payments.insertOne(savePaymentData);
+
+      if (payment) {
+        res.send(response.data);
+      } else {
+        res.send({ message: "Something went wrong! Try later." });
+      }
+    });
+
+    app.post("/success-payment", async (req, res) => {
+      const body = req.body;
+
+      if (body.status === "VALID") {
+        const filter = {
+          transactionID: new ObjectId(body.tran_id),
+        };
+
+        const updateDoc = {
+          $set: {
+            bank_tran_id: body.bank_tran_id,
+            card_issuer: body.card_issuer,
+            currency: body.currency,
+            store_amount: body.store_amount,
+            tran_date: body.tran_date,
+            card_brand: body.card_brand,
+            status: "success",
+          },
+        };
+
+        await payments.updateOne(filter, updateDoc);
+
+        res.redirect(`${client_url}/dashboard/success-payment`);
+      } else {
+        res.send({ message: "Error Found" });
+      }
+
+      // console.log("payment success", body);
+    });
+
+    app.post("/fail-payment", async (req,res) => {
+      res.redirect(`${client_url}/dashboard/fail-payment`);
+    });
+
+    app.post("/cancel-payment", async (req, res) => {
+      res.redirect(`${client_url}/dashboard/cancel-payment`);
+    });
+
+    // Normal Routes
+
     app.get("/", (req, res) => {
-      res.send("Hello World");
+      res.send({ message: "Hello World" });
     });
 
     app.get("/slides", async (req, res) => {
@@ -302,4 +434,4 @@ async function run() {
 }
 run().catch(console.dir);
 
-app.listen(PORT, console.log(`App is running on ${PORT}`));
+app.listen(PORT);
