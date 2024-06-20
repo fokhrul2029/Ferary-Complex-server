@@ -189,7 +189,7 @@ async function run() {
       // console.log("payment success", body);
     });
 
-    app.post("/fail-payment", async (req,res) => {
+    app.post("/fail-payment", async (req, res) => {
       res.redirect(`${client_url}/dashboard/fail-payment`);
     });
 
@@ -245,14 +245,14 @@ async function run() {
       const query = req.query;
 
       if (!query.email) {
-        return res.status(400).send({ error: "Email parameter is required" });
+        return res.status(400).send({ message: "Unauthorized" });
       }
 
       if (req?.query) {
         const result = await users.findOne({ email: query.email });
         res.send(result);
       } else {
-        res.status(404).send({ error: "User not found" });
+        res.status(404).send({ message: "User not found" });
       }
     });
 
@@ -337,6 +337,23 @@ async function run() {
         res.status(200).send(result);
       } else {
         res.send("You do not agreement to book.");
+      }
+    });
+
+    app.get("/payment-history", async (req, res) => {
+      const query = req.query;
+      // console.log(query);
+      if (!query.email) {
+        res.send({ message: "Unauthorized" });
+      }
+      if (query.email) {
+        const filter = { "userInfo.email": query.email, status: "success" };
+        const result = await payments.find(filter).toArray();
+        if (result.length > 0) {
+          res.send(result);
+        } else {
+          res.send({ message: "No payment history available" });
+        }
       }
     });
 
